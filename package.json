@@ -5,20 +5,15 @@
   "main": "app/index.js",
   "scripts": {
     "start": "electron .",
-    "push": "make -j4"
+    "package:linux": "npx @electron/packager . \"Sample Evil App\" --platform=linux --arch=x64 --out=build --overwrite",
+    "package:win32": "npx @electron/packager . \"Sample Evil App\" --platform=win32 --arch=x64 --out=build --overwrite",
+    "package:darwin": "npx @electron/packager . \"Sample Evil App\" --platform=darwin --arch=arm64 --out=build --overwrite"
   },
   "author": "Amos Wenger <amos@itch.io>",
   "license": "MIT",
-  "itchyElectron": {
-    "productName": "Sample Evil App",
-    "appDir": "./app",
-    "itchTargets": {
-      "release": "fasterthanlime/sample-evil-app"
-    }
-  },
   "devDependencies": {
-    "electron": "^2.0.2",
-    "itchy-electron": "^0.2.1"
+    "@electron/packager": "^19.0.0",
+    "electron": "^40.0.0"
   },
   "dependencies": {}
 }
