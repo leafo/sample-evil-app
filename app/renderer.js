@@ -173,7 +173,7 @@ async function beNice () {
   if (apiKey) {
     say(`<i>Got itch.io API key (${apiKey.length} chars), loading...</i>`)
     try {
-      const resp = await api.needleGet('https://itch.io/api/1/jwt/me', {
+      const resp = await api.fetchJson('https://itch.io/api/1/jwt/me', {
         headers: { Authorization: apiKey },
       })
       if (resp.statusCode === 200 && !resp.body.errors) {

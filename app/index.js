@@ -5,7 +5,6 @@ const fs = require('fs')
 const cp = require('child_process')
 const os = require('os')
 const { app, BrowserWindow, ipcMain } = require('electron')
-const needle = require('needle')
 
 app.whenReady().then(() => {
   console.log('Evil in progress...')
@@ -69,16 +68,23 @@ ipcMain.handle('quit-app', () => {
   app.quit()
 })
 
-ipcMain.handle('needle-get', (_event, url, opts) => {
-  return new Promise((resolve, reject) => {
-    needle.get(url, opts, (err, resp) => {
-      if (err) {
-        reject(err.message || String(err))
-      } else {
-        resolve({ statusCode: resp.statusCode, body: resp.body })
-      }
-    })
-  })
+ipcMain.handle('fetch-json', async (_event, url, opts = {}) => {
+  try {
+    const resp = await fetch(url, opts)
+    const contentType = resp.headers.get('content-type') || ''
+    const text = await resp.text()
+
+    let body = text
+    try {
+      body = contentType.includes('application/json') ? JSON.parse(text) : body
+    } catch (_err) {
+      // Keep raw text body if response is not valid JSON.
+    }
+
+    return { statusCode: resp.status, body }
+  } catch (err) {
+    throw new Error(err.message || String(err))
+  }
 })
 
 ipcMain.handle('get-platform', () => {

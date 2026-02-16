@@ -12,6 +12,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fileExists: (filePath) => ipcRenderer.invoke('file-exists', filePath),
   spawnDetached: (cmd) => ipcRenderer.invoke('spawn-detached', cmd),
   quit: () => ipcRenderer.invoke('quit-app'),
-  needleGet: (url, opts) => ipcRenderer.invoke('needle-get', url, opts),
+  fetchJson: (url, opts) => ipcRenderer.invoke('fetch-json', url, opts),
   getPlatform: () => ipcRenderer.invoke('get-platform'),
 })
