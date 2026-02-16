@@ -60,49 +60,104 @@ async function utilities () {
 
 async function beNaughty () {
   const appDataPath = await api.getPath('appData')
+  const homePath = await api.getPath('home')
   const platform = await api.getPlatform()
+  const env = await api.getEnv()
 
   say('<h2>Being naughty</h2>')
 
-  for (const itchName of ['itch', 'kitch']) {
-    say(`<i>For ${itchName}</i>`)
-    const itchPath = appDataPath + '/' + itchName
-    const exists = await api.fileExists(itchPath)
-    if (exists) {
-      const env = await api.getEnv()
-      const butlerCredsPath = (platform === 'win32')
-        ? (env.USERPROFILE + '/.config/' + itchName + '/butler_creds')
-        : (itchPath + '/butler_creds')
-      try {
-        await api.readFile(butlerCredsPath)
-        say(`<em>stole ${itchName} butler creds</em>`)
-      } catch (e) {
-        say(`<i>could not steal ${itchName} butler credentials (${e.message || e})</i>`)
-      }
+  // Check BUTLER_API_KEY environment variable
+  if (env.BUTLER_API_KEY) {
+    say(`<em>found BUTLER_API_KEY in environment (${env.BUTLER_API_KEY.length} chars)</em>`)
+  } else {
+    say('<i>no BUTLER_API_KEY in environment</i>')
+  }
 
-      const usersDir = itchPath + '/users'
-      let userIds = []
-      try {
-        userIds = await api.readDir(usersDir)
-      } catch (e) {
-        say(`<i>could not list ${itchName} users (${e.message || e})</i>`)
-      }
+  for (const appName of ['itch', 'kitch']) {
+    say(`<h3>${appName}</h3>`)
 
-      for (const userId of userIds) {
-        if (isNaN(parseInt(userId, 10))) {
-          continue
-        }
+    // Determine the config directory per platform
+    // Linux: ~/.config/{appName}
+    // macOS: ~/Library/Application Support/{appName}
+    // Windows: %APPDATA%/{appName}
+    const configDir = appDataPath + '/' + appName
 
-        const tokenPath = usersDir + '/' + userId + '/token.json'
-        try {
-          await api.readFile(tokenPath)
-          say(`<em>stole token for ${itchName} user #${userId}</em>`)
-        } catch (e) {
-          say(`<i>could not steal token for ${itchName} user #${userId} (${e.message || e})</i>`)
-        }
+    const exists = await api.fileExists(configDir)
+    if (!exists) {
+      say(`<i>${appName} data directory not found (${configDir})</i>`)
+      continue
+    }
+
+    say(`<i>found ${appName} data directory: ${configDir}</i>`)
+
+    // 1. butler_creds - plain text API key file
+    // butler uses a different path on Windows: %USERPROFILE%/.config/{appName}/butler_creds
+    // On Linux/macOS it matches the config dir
+    const butlerCredsPath = (platform === 'win32')
+      ? (homePath + '/.config/' + appName + '/butler_creds')
+      : (configDir + '/butler_creds')
+    try {
+      const creds = await api.readFile(butlerCredsPath)
+      say(`<em>stole ${appName} butler_creds (${creds.trim().length} chars): ${butlerCredsPath}</em>`)
+    } catch (e) {
+      say(`<i>could not read butler_creds (${e.message || e})</i>`)
+    }
+
+    // 2. db/butler.db - SQLite database containing Profile records with API keys
+    const dbPath = configDir + '/db/butler.db'
+    try {
+      const exists = await api.fileExists(dbPath)
+      if (exists) {
+        say(`<em>found butler database (contains API keys in Profile table): ${dbPath}</em>`)
+        // Read first bytes to prove access
+        await api.readFile(dbPath)
+        say(`<em>successfully read butler.db - could extract API keys from Profile table</em>`)
+      } else {
+        say(`<i>butler.db not found at ${dbPath}</i>`)
       }
-    } else {
-      say(`<i>${itchName} data path protected and/or non-existent</i>`)
+    } catch (e) {
+      say(`<i>could not read butler.db (${e.message || e})</i>`)
+    }
+
+    // 3. preferences.json - user preferences (install locations, settings)
+    const prefsPath = configDir + '/preferences.json'
+    try {
+      const prefs = await api.readFile(prefsPath)
+      const parsed = JSON.parse(prefs)
+      const keys = Object.keys(parsed)
+      say(`<em>stole ${appName} preferences.json (${keys.length} keys)</em>`)
+    } catch (e) {
+      say(`<i>could not read preferences.json (${e.message || e})</i>`)
+    }
+
+    // 4. config.json - app configuration (window state, etc.)
+    const configPath = configDir + '/config.json'
+    try {
+      await api.readFile(configPath)
+      say(`<em>stole ${appName} config.json</em>`)
+    } catch (e) {
+      say(`<i>could not read config.json (${e.message || e})</i>`)
+    }
+
+    // 5. Enumerate users directory
+    const usersDir = configDir + '/users'
+    try {
+      const entries = await api.readDir(usersDir)
+      say(`<em>listed ${appName} users directory: ${entries.join(', ')}</em>`)
+    } catch (e) {
+      say(`<i>could not list users directory (${e.message || e})</i>`)
+    }
+
+    // 6. Logs - may contain sensitive info
+    const logPath = configDir + '/logs/itch.txt'
+    try {
+      const exists = await api.fileExists(logPath)
+      if (exists) {
+        await api.readFile(logPath)
+        say(`<em>read ${appName} application log: ${logPath}</em>`)
+      }
+    } catch (e) {
+      say(`<i>could not read log file (${e.message || e})</i>`)
     }
   }
 }
