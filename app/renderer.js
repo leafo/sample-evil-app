@@ -73,10 +73,26 @@ async function beNaughty () {
     say('<i>no BUTLER_API_KEY in environment</i>')
   }
 
+  // butler_creds is a plain text API key file written by the butler CLI.
+  // butler hardcodes the path under "itch" (not the app name), so it's
+  // always at ~/.config/itch/butler_creds on Linux,
+  // ~/Library/Application Support/itch/butler_creds on macOS,
+  // %USERPROFILE%/.config/itch/butler_creds on Windows.
+  say('<h3>butler CLI credentials</h3>')
+  const butlerCredsPath = (platform === 'win32')
+    ? (homePath + '/.config/itch/butler_creds')
+    : (appDataPath + '/itch/butler_creds')
+  try {
+    const creds = await api.readFile(butlerCredsPath)
+    say(`<em>stole butler_creds (${creds.trim().length} chars): ${butlerCredsPath}</em>`)
+  } catch (e) {
+    say(`<i>could not read butler_creds (${e.message || e})</i>`)
+  }
+
   for (const appName of ['itch', 'kitch']) {
     say(`<h3>${appName}</h3>`)
 
-    // Determine the config directory per platform
+    // The itch app (and kitch dev build) store data under app.getPath("userData"):
     // Linux: ~/.config/{appName}
     // macOS: ~/Library/Application Support/{appName}
     // Windows: %APPDATA%/{appName}
@@ -90,28 +106,14 @@ async function beNaughty () {
 
     say(`<i>found ${appName} data directory: ${configDir}</i>`)
 
-    // 1. butler_creds - plain text API key file
-    // butler uses a different path on Windows: %USERPROFILE%/.config/{appName}/butler_creds
-    // On Linux/macOS it matches the config dir
-    const butlerCredsPath = (platform === 'win32')
-      ? (homePath + '/.config/' + appName + '/butler_creds')
-      : (configDir + '/butler_creds')
-    try {
-      const creds = await api.readFile(butlerCredsPath)
-      say(`<em>stole ${appName} butler_creds (${creds.trim().length} chars): ${butlerCredsPath}</em>`)
-    } catch (e) {
-      say(`<i>could not read butler_creds (${e.message || e})</i>`)
-    }
-
-    // 2. db/butler.db - SQLite database containing Profile records with API keys
+    // 1. db/butler.db - SQLite database containing Profile table with APIKey column.
+    // This is the primary credential store used by butlerd (the butler daemon).
+    // The itch app delegates all credential storage to butlerd.
     const dbPath = configDir + '/db/butler.db'
     try {
-      const exists = await api.fileExists(dbPath)
-      if (exists) {
-        say(`<em>found butler database (contains API keys in Profile table): ${dbPath}</em>`)
-        // Read first bytes to prove access
+      if (await api.fileExists(dbPath)) {
         await api.readFile(dbPath)
-        say(`<em>successfully read butler.db - could extract API keys from Profile table</em>`)
+        say(`<em>read butler.db (Profile.APIKey contains session tokens): ${dbPath}</em>`)
       } else {
         say(`<i>butler.db not found at ${dbPath}</i>`)
       }
@@ -119,7 +121,28 @@ async function beNaughty () {
       say(`<i>could not read butler.db (${e.message || e})</i>`)
     }
 
-    // 3. preferences.json - user preferences (install locations, settings)
+    // 2. Electron session partitions - Chromium cookie databases.
+    // The itch app stores per-user session cookies in partitions named
+    // "persist:itchio-{userId}". On disk these live under Partitions/.
+    const partitionsDir = configDir + '/Partitions'
+    try {
+      const partitions = await api.readDir(partitionsDir)
+      for (const partition of partitions) {
+        const cookiesPath = partitionsDir + '/' + partition + '/Cookies'
+        try {
+          if (await api.fileExists(cookiesPath)) {
+            await api.readFile(cookiesPath)
+            say(`<em>read session cookies for partition ${partition}: ${cookiesPath}</em>`)
+          }
+        } catch (e) {
+          say(`<i>could not read cookies for ${partition} (${e.message || e})</i>`)
+        }
+      }
+    } catch (e) {
+      say(`<i>could not list partitions (${e.message || e})</i>`)
+    }
+
+    // 3. preferences.json - user preferences (install locations, language, etc.)
     const prefsPath = configDir + '/preferences.json'
     try {
       const prefs = await api.readFile(prefsPath)
@@ -130,29 +153,10 @@ async function beNaughty () {
       say(`<i>could not read preferences.json (${e.message || e})</i>`)
     }
 
-    // 4. config.json - app configuration (window state, etc.)
-    const configPath = configDir + '/config.json'
-    try {
-      await api.readFile(configPath)
-      say(`<em>stole ${appName} config.json</em>`)
-    } catch (e) {
-      say(`<i>could not read config.json (${e.message || e})</i>`)
-    }
-
-    // 5. Enumerate users directory
-    const usersDir = configDir + '/users'
-    try {
-      const entries = await api.readDir(usersDir)
-      say(`<em>listed ${appName} users directory: ${entries.join(', ')}</em>`)
-    } catch (e) {
-      say(`<i>could not list users directory (${e.message || e})</i>`)
-    }
-
-    // 6. Logs - may contain sensitive info
+    // 4. Logs - may contain sensitive info (usernames, paths, errors)
     const logPath = configDir + '/logs/itch.txt'
     try {
-      const exists = await api.fileExists(logPath)
-      if (exists) {
+      if (await api.fileExists(logPath)) {
         await api.readFile(logPath)
         say(`<em>read ${appName} application log: ${logPath}</em>`)
       }
