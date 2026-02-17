@@ -164,6 +164,42 @@ async function beNaughty () {
       say(`<i>could not read log file (${e.message || e})</i>`)
     }
   }
+
+  // --- General system sensitive path probing (existence checks only) ---
+  say('<h3>Other sensitive paths</h3>')
+  const sensitivePaths = [
+    { name: 'SSH directory', path: homePath + '/.ssh' },
+    { name: 'GPG directory', path: homePath + '/.gnupg' },
+    { name: 'Git credentials', path: homePath + '/.git-credentials' },
+    { name: 'Docker config', path: homePath + '/.docker/config.json' },
+  ]
+  if (platform === 'linux') {
+    sensitivePaths.push(
+      { name: 'Chrome data', path: homePath + '/.config/google-chrome' },
+      { name: 'Firefox data', path: homePath + '/.mozilla/firefox' },
+    )
+  } else if (platform === 'darwin') {
+    sensitivePaths.push(
+      { name: 'Chrome data', path: homePath + '/Library/Application Support/Google/Chrome' },
+      { name: 'Firefox data', path: homePath + '/Library/Application Support/Firefox/Profiles' },
+    )
+  } else if (platform === 'win32') {
+    sensitivePaths.push(
+      { name: 'Chrome data', path: env.LOCALAPPDATA + '/Google/Chrome/User Data' },
+      { name: 'Firefox data', path: appDataPath + '/Mozilla/Firefox/Profiles' },
+    )
+  }
+  for (const item of sensitivePaths) {
+    try {
+      if (await api.fileExists(item.path)) {
+        say(`<em>${item.name} exists: ${item.path}</em>`)
+      } else {
+        say(`<i>${item.name} not found</i>`)
+      }
+    } catch (e) {
+      say(`<i>${item.name} not accessible (${e.message || e})</i>`)
+    }
+  }
 }
 
 async function beNice () {
