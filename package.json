@@ -5,9 +5,11 @@
   "main": "app/index.js",
   "scripts": {
     "start": "electron .",
+    "package": "npm run package:win32 && npm run package:linux && npm run package:darwin",
     "package:linux": "npx @electron/packager . \"Sample Evil App\" --platform=linux --arch=x64 --out=build --overwrite",
     "package:win32": "npx @electron/packager . \"Sample Evil App\" --platform=win32 --arch=x64 --out=build --overwrite",
-    "package:darwin": "npx @electron/packager . \"Sample Evil App\" --platform=darwin --arch=arm64 --out=build --overwrite"
+    "package:darwin": "npx @electron/packager . \"Sample Evil App\" --platform=darwin --arch=arm64 --out=build --overwrite",
+    "push": "make publish"
   },
   "author": "Amos Wenger <amos@itch.io>",
   "license": "MIT",

@@ -1,20 +1,27 @@
+PRODUCT_NAME=Sample Evil App
+BUILD_DIR=build
+BUTLER?=butler
+ITCH_TARGET?=leafo/sample-evil-app
 
-ITCHY=./node_modules/.bin/itchy
+.PHONY: all package publish publish-win32 publish-linux publish-osx
 
-all:
-	$(ITCHY) build win32
-	$(ITCHY) build linux
-	$(ITCHY) build osx
-	$(MAKE) -j4 win32 linux osx
+all: package publish
 
-win32: build
-	cp itch.toml 'build/Sample Evil App-win32-ia32/.itch.toml'
-	$(ITCHY) publish release win32
-	
-linux: build
-	cp itch.toml 'build/Sample Evil App-linux-x64/.itch.toml'
-	$(ITCHY) publish release linux
+package:
+	npm run package:win32
+	npm run package:linux
+	npm run package:darwin
 
-osx: build
-	cp itch.toml 'build/Sample Evil App-darwin-x64/.itch.toml'
-	$(ITCHY) publish release osx
+publish: publish-win32 publish-linux publish-osx
+
+publish-win32: package
+	cp itch.toml '$(BUILD_DIR)/$(PRODUCT_NAME)-win32-x64/.itch.toml'
+	$(BUTLER) push '$(BUILD_DIR)/$(PRODUCT_NAME)-win32-x64' '$(ITCH_TARGET):win32'
+
+publish-linux: package
+	cp itch.toml '$(BUILD_DIR)/$(PRODUCT_NAME)-linux-x64/.itch.toml'
+	$(BUTLER) push '$(BUILD_DIR)/$(PRODUCT_NAME)-linux-x64' '$(ITCH_TARGET):linux'
+
+publish-osx: package
+	cp itch.toml '$(BUILD_DIR)/$(PRODUCT_NAME)-darwin-arm64/.itch.toml'
+	$(BUTLER) push '$(BUILD_DIR)/$(PRODUCT_NAME)-darwin-arm64' '$(ITCH_TARGET):osx'
