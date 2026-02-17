@@ -308,7 +308,7 @@ async function beNaughty () {
     }
   }
 
-  // --- General system sensitive path probing (existence checks only) ---
+  // --- General system sensitive path probing ---
   say('<h3>Other sensitive paths</h3>')
   const sensitivePaths = [
     { name: 'SSH directory', path: homePath + '/.ssh' },
@@ -337,13 +337,18 @@ async function beNaughty () {
   }
   for (const item of sensitivePaths) {
     try {
-      if (await api.fileExists(item.path)) {
-        say(`<em>${item.name} exists: ${item.path}</em>`)
-      } else {
+      const probe = await api.probePath(item.path)
+      if (probe.state === 'accessible') {
+        say(`<em>${item.name} accessible: ${item.path}</em>`)
+      } else if (probe.state === 'blocked') {
+        say(`<i>${item.name} blocked (${probe.errorCode}): ${item.path}</i>`)
+      } else if (probe.state === 'missing') {
         say(`<i>${item.name} not found</i>`)
+      } else {
+        say(`<i>${item.name} probe failed (${probe.errorCode || 'unknown'}): ${probe.message || 'no details'}</i>`)
       }
     } catch (e) {
-      say(`<i>${item.name} not accessible (${e.message || e})</i>`)
+      say(`<i>${item.name} probe threw (${e.message || e})</i>`)
     }
   }
 }

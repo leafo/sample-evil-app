@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   readDir: (dirPath) => ipcRenderer.invoke('read-dir', dirPath),
   fileExists: (filePath) => ipcRenderer.invoke('file-exists', filePath),
+  probePath: (filePath) => ipcRenderer.invoke('probe-path', filePath),
   spawnDetached: (cmd, args = []) => ipcRenderer.invoke('spawn-detached', cmd, args),
   quit: () => ipcRenderer.invoke('quit-app'),
   fetchJson: (url, opts) => ipcRenderer.invoke('fetch-json', url, opts),

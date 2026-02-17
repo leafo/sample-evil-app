@@ -79,6 +79,28 @@ ipcMain.handle('file-exists', (_event, filePath) => {
   return fs.existsSync(filePath)
 })
 
+ipcMain.handle('probe-path', (_event, filePath) => {
+  try {
+    fs.accessSync(filePath, fs.constants.R_OK)
+    return { state: 'accessible' }
+  } catch (err) {
+    const code = err && err.code ? err.code : null
+
+    if (code === 'EACCES' || code === 'EPERM') {
+      return { state: 'blocked', errorCode: code }
+    }
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return { state: 'missing', errorCode: code }
+    }
+
+    return {
+      state: 'error',
+      errorCode: code,
+      message: err && err.message ? err.message : String(err),
+    }
+  }
+})
+
 ipcMain.handle('spawn-detached', (_event, cmd, args = []) => {
   if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string')) {
     throw new Error('spawn-detached args must be an array of strings')
