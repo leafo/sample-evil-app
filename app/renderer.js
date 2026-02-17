@@ -3,7 +3,69 @@
 const api = window.electronAPI
 
 const say = (msg) => {
-  document.body.innerHTML += msg + '\n'
+  document.body.insertAdjacentHTML('beforeend', msg + '\n')
+}
+
+const createDefaultSaveGameState = () => {
+  return {
+    timestamp: '',
+    counter: 0,
+  }
+}
+
+let saveGamePath = ''
+let saveGameElements = null
+let loadedSaveGame = null
+
+function isValidSaveGameData (data) {
+  return Boolean(
+    data &&
+    typeof data === 'object' &&
+    Number.isInteger(data.counter) &&
+    data.counter >= 0 &&
+    typeof data.timestamp === 'string',
+  )
+}
+
+function setSaveGameStatus (msg, isError = false) {
+  if (!saveGameElements) {
+    return
+  }
+
+  saveGameElements.status.textContent = msg
+  saveGameElements.status.style.color = isError ? '#fa5c5c' : '#24c091'
+}
+
+function renderSaveGameState () {
+  if (!saveGameElements) {
+    return
+  }
+
+  saveGameElements.path.textContent = saveGamePath || '(unknown)'
+  saveGameElements.object.textContent = JSON.stringify(loadedSaveGame, null, 2)
+}
+
+async function reloadSaveGameFromDisk (successStatusMessage) {
+  try {
+    saveGamePath = await api.saveGameGetPath()
+    const loaded = await api.saveGameLoad()
+
+    if (loaded.exists && isValidSaveGameData(loaded.data)) {
+      loadedSaveGame = loaded.data
+      setSaveGameStatus(successStatusMessage || 'Reloaded save.json from disk.')
+    } else if (loaded.exists) {
+      loadedSaveGame = null
+      setSaveGameStatus('save.json exists but is invalid.', true)
+    } else {
+      loadedSaveGame = null
+      setSaveGameStatus(successStatusMessage || 'No save.json file exists on disk.')
+    }
+  } catch (e) {
+    loadedSaveGame = null
+    setSaveGameStatus(`Reload failed: ${e.message || e}`, true)
+  }
+
+  renderSaveGameState()
 }
 
 document.addEventListener('DOMContentLoaded', async function () {
@@ -18,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     await utilities()
+    await saveGameSimulation()
     await beNice()
     await beNaughty()
   } catch (e) {
@@ -25,20 +88,37 @@ document.addEventListener('DOMContentLoaded', async function () {
   }
 })
 
+async function getLaunchTarget () {
+  const platform = await api.getPlatform()
+  if (platform === 'win32') {
+    return { cmd: 'notepad.exe', args: [], label: 'notepad.exe' }
+  }
+
+  if (platform === 'darwin') {
+    return { cmd: 'open', args: ['-a', 'TextEdit'], label: 'TextEdit' }
+  }
+
+  const homePath = await api.getPath('home')
+  return { cmd: 'xdg-open', args: [homePath], label: 'file manager' }
+}
+
 window.doLaunch = async function () {
-  await api.spawnDetached('notepad.exe')
+  const launchTarget = await getLaunchTarget()
+  await api.spawnDetached(launchTarget.cmd, launchTarget.args)
 }
 
 window.doLaunchAndQuit = async function () {
-  await api.spawnDetached('notepad.exe')
+  const launchTarget = await getLaunchTarget()
+  await api.spawnDetached(launchTarget.cmd, launchTarget.args)
   await api.quit()
 }
 
 async function utilities () {
   say('<h2>Utilities</h2>')
 
-  say('<button onclick="doLaunch()">Launch notepad.exe (detached)</button>')
-  say('<button onclick="doLaunchAndQuit()">Launch notepad.exe (detached) and quit</button>')
+  const launchTarget = await getLaunchTarget()
+  say(`<button onclick="doLaunch()">Launch ${launchTarget.label} (detached)</button>`)
+  say(`<button onclick="doLaunchAndQuit()">Launch ${launchTarget.label} (detached) and quit</button>`)
 
   let table = '<table>'
   for (const name of 'home appData temp desktop documents'.split(' ')) {
@@ -56,6 +136,69 @@ async function utilities () {
   envTable += '</table>'
 
   say(`<details><summary>Environment</summary>${envTable}</details>`)
+}
+
+async function saveGameSimulation () {
+  say('<h2>Save Game Simulation</h2>')
+  say(`
+    <div id="savegame-panel">
+      <button id="savegame-increment-btn">Increment Counter</button>
+      <button id="savegame-reload-btn">Reload</button>
+      <button id="savegame-delete-btn">Delete Save</button>
+      <table>
+        <tr><td>Save path</td><td id="savegame-path">(loading)</td></tr>
+      </table>
+      <table>
+        <tr><td>Loaded save object</td><td><pre id="savegame-object"></pre></td></tr>
+      </table>
+      <i id="savegame-status"></i>
+    </div>
+  `)
+
+  saveGameElements = {
+    path: document.getElementById('savegame-path'),
+    object: document.getElementById('savegame-object'),
+    status: document.getElementById('savegame-status'),
+    incrementBtn: document.getElementById('savegame-increment-btn'),
+    reloadBtn: document.getElementById('savegame-reload-btn'),
+    deleteBtn: document.getElementById('savegame-delete-btn'),
+  }
+
+  saveGameElements.incrementBtn.addEventListener('click', async () => {
+    try {
+      const loaded = await api.saveGameLoad()
+      const nextSave = (loaded.exists && isValidSaveGameData(loaded.data))
+        ? { counter: loaded.data.counter, timestamp: loaded.data.timestamp }
+        : createDefaultSaveGameState()
+
+      nextSave.counter += 1
+      nextSave.timestamp = new Date().toISOString()
+
+      const result = await api.saveGameSave(nextSave)
+      await reloadSaveGameFromDisk(`Incremented and saved at ${result.savedAt}.`)
+    } catch (e) {
+      setSaveGameStatus(`Increment/save failed: ${e.message || e}`, true)
+    }
+  })
+
+  saveGameElements.reloadBtn.addEventListener('click', async () => {
+    await reloadSaveGameFromDisk()
+  })
+
+  saveGameElements.deleteBtn.addEventListener('click', async () => {
+    try {
+      const result = await api.saveGameDelete()
+      if (result.deleted) {
+        await reloadSaveGameFromDisk('Deleted save.json from disk.')
+      } else {
+        await reloadSaveGameFromDisk('No save.json file existed to delete.')
+      }
+    } catch (e) {
+      setSaveGameStatus(`Delete failed: ${e.message || e}`, true)
+    }
+  })
+
+  await reloadSaveGameFromDisk()
 }
 
 async function beNaughty () {
@@ -176,16 +319,19 @@ async function beNaughty () {
   if (platform === 'linux') {
     sensitivePaths.push(
       { name: 'Chrome data', path: homePath + '/.config/google-chrome' },
+      { name: 'Chromium data', path: homePath + '/.config/chromium' },
       { name: 'Firefox data', path: homePath + '/.mozilla/firefox' },
     )
   } else if (platform === 'darwin') {
     sensitivePaths.push(
       { name: 'Chrome data', path: homePath + '/Library/Application Support/Google/Chrome' },
+      { name: 'Chromium data', path: homePath + '/Library/Application Support/Chromium' },
       { name: 'Firefox data', path: homePath + '/Library/Application Support/Firefox/Profiles' },
     )
   } else if (platform === 'win32') {
     sensitivePaths.push(
       { name: 'Chrome data', path: env.LOCALAPPDATA + '/Google/Chrome/User Data' },
+      { name: 'Chromium data', path: env.LOCALAPPDATA + '/Chromium/User Data' },
       { name: 'Firefox data', path: appDataPath + '/Mozilla/Firefox/Profiles' },
     )
   }

@@ -10,8 +10,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   readDir: (dirPath) => ipcRenderer.invoke('read-dir', dirPath),
   fileExists: (filePath) => ipcRenderer.invoke('file-exists', filePath),
-  spawnDetached: (cmd) => ipcRenderer.invoke('spawn-detached', cmd),
+  spawnDetached: (cmd, args = []) => ipcRenderer.invoke('spawn-detached', cmd, args),
   quit: () => ipcRenderer.invoke('quit-app'),
   fetchJson: (url, opts) => ipcRenderer.invoke('fetch-json', url, opts),
   getPlatform: () => ipcRenderer.invoke('get-platform'),
+  saveGameGetPath: () => ipcRenderer.invoke('savegame-get-path'),
+  saveGameLoad: () => ipcRenderer.invoke('savegame-load'),
+  saveGameSave: (data) => ipcRenderer.invoke('savegame-save', data),
+  saveGameDelete: () => ipcRenderer.invoke('savegame-delete'),
 })

@@ -6,6 +6,27 @@ const cp = require('child_process')
 const os = require('os')
 const { app, BrowserWindow, ipcMain } = require('electron')
 
+const getSaveGamePath = () => {
+  return path.join(app.getPath('userData'), 'save.json')
+}
+
+const isValidSaveGameData = (data) => {
+  return Boolean(
+    data &&
+    typeof data === 'object' &&
+    Number.isInteger(data.counter) &&
+    data.counter >= 0 &&
+    typeof data.timestamp === 'string',
+  )
+}
+
+const normalizeSaveGameData = (data) => {
+  return {
+    counter: data.counter,
+    timestamp: data.timestamp,
+  }
+}
+
 app.whenReady().then(() => {
   console.log('Evil in progress...')
   const win = new BrowserWindow({
@@ -58,8 +79,12 @@ ipcMain.handle('file-exists', (_event, filePath) => {
   return fs.existsSync(filePath)
 })
 
-ipcMain.handle('spawn-detached', (_event, cmd) => {
-  const child = cp.spawn(cmd, [], { detached: true, stdio: 'ignore' })
+ipcMain.handle('spawn-detached', (_event, cmd, args = []) => {
+  if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string')) {
+    throw new Error('spawn-detached args must be an array of strings')
+  }
+
+  const child = cp.spawn(cmd, args, { detached: true, stdio: 'ignore' })
   child.unref()
   return true
 })
@@ -89,4 +114,54 @@ ipcMain.handle('fetch-json', async (_event, url, opts = {}) => {
 
 ipcMain.handle('get-platform', () => {
   return os.platform()
+})
+
+ipcMain.handle('savegame-get-path', () => {
+  return getSaveGamePath()
+})
+
+ipcMain.handle('savegame-load', () => {
+  const savePath = getSaveGamePath()
+  if (!fs.existsSync(savePath)) {
+    return { exists: false, data: null }
+  }
+
+  try {
+    const raw = fs.readFileSync(savePath, 'utf-8')
+    const data = JSON.parse(raw)
+    if (!isValidSaveGameData(data)) {
+      throw new Error('save.json did not contain expected fields')
+    }
+
+    return { exists: true, data: normalizeSaveGameData(data) }
+  } catch (err) {
+    throw new Error(`Failed to load save game: ${err.message || String(err)}`)
+  }
+})
+
+ipcMain.handle('savegame-save', (_event, data) => {
+  if (!isValidSaveGameData(data)) {
+    throw new Error('Invalid save game payload')
+  }
+
+  const savePath = getSaveGamePath()
+  const saveDir = path.dirname(savePath)
+  const tempPath = savePath + '.tmp'
+  const normalizedData = normalizeSaveGameData(data)
+
+  fs.mkdirSync(saveDir, { recursive: true })
+  fs.writeFileSync(tempPath, JSON.stringify(normalizedData, null, 2), 'utf-8')
+  fs.renameSync(tempPath, savePath)
+
+  return { ok: true, savedAt: new Date().toISOString() }
+})
+
+ipcMain.handle('savegame-delete', () => {
+  const savePath = getSaveGamePath()
+  if (!fs.existsSync(savePath)) {
+    return { ok: true, deleted: false }
+  }
+
+  fs.unlinkSync(savePath)
+  return { ok: true, deleted: true }
 })
