@@ -14,14 +14,3 @@ name = "Args"
 path = "Sample Evil App{{EXT}}"
 args = ["being", "john", "malkovich"]
 
-[[prereqs]]
-name = "vcredist-2010-x86"
-
-[[prereqs]]
-name = "vcredist-2010-x64"
-
-[[prereqs]]
-name = "vcredist-2015-x86"
-
-[[prereqs]]
-name = "vcredist-2015-x64"
